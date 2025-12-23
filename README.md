@@ -20,11 +20,22 @@ uv run doc-analyzer analyze https://docs.google.com/...
 
 # Start the web server
 uv run uvicorn doc_analyzer.api:app --reload
+
+# Open the UI (after server starts)
+# http://localhost:8000
 ```
+
+## Web UI (Phase 1)
+
+- Visit `http://localhost:8000`
+- Paste a Google Doc/Slides URL
+- Choose provider (OpenAI/Anthropic/Google)
+- Optional toggles: post to Slack, add Google Doc/Slides comment
+- Shows score, issues count, and raw JSON response
 
 ## Configuration
 
-Copy `.env.example` to `.env` and configure:
+Copy `env.example` to `.env` and configure:
 
 - `FATHOM_API_KEY` - For call transcript access
 - `OPENAI_API_KEY` - For LLM analysis

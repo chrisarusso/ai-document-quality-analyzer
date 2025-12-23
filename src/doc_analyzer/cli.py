@@ -1,6 +1,7 @@
 """Command-line interface for Document Quality Analyzer."""
 
 import argparse
+import asyncio
 import sys
 from rich.console import Console
 from rich.table import Table
@@ -9,6 +10,7 @@ from rich import print as rprint
 
 from .analyzers.quality_analyzer import QualityAnalyzer
 from .analyzers.llm_analyzer import LLMProvider
+from .integrations.fathom import FathomClient
 from .integrations.slack import SlackNotifier
 from .models import IssueSeverity
 
@@ -66,6 +68,32 @@ def main():
         help="LLM provider to use"
     )
 
+    # fathom command
+    fathom_parser = subparsers.add_parser("fathom", help="Work with Fathom recordings/transcripts")
+    fathom_sub = fathom_parser.add_subparsers(dest="fathom_command", help="Fathom commands")
+
+    fathom_list = fathom_sub.add_parser("list", help="List recent Fathom meetings")
+    fathom_list.add_argument("--limit", type=int, default=10, help="Number of meetings to list")
+
+    fathom_analyze = fathom_sub.add_parser("analyze", help="Analyze a Fathom recording transcript")
+    fathom_analyze.add_argument("recording_id", help="Fathom recording ID")
+    fathom_analyze.add_argument(
+        "--sales",
+        action="store_true",
+        help="Analyze as sales call (BANNT scoring). Default is client call if omitted.",
+    )
+    fathom_analyze.add_argument(
+        "--provider", "-p",
+        choices=["openai", "anthropic", "google"],
+        default="openai",
+        help="LLM provider to use",
+    )
+    fathom_analyze.add_argument(
+        "--slack", "-s",
+        action="store_true",
+        help="Post results to Slack",
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -78,6 +106,8 @@ def main():
         compare_providers(args)
     elif args.command == "transcript":
         analyze_transcript(args)
+    elif args.command == "fathom":
+        fathom_command(args)
 
 
 def analyze_document(args):
@@ -158,6 +188,71 @@ def analyze_transcript(args):
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise
+
+
+def fathom_command(args):
+    """Handle Fathom-related commands."""
+    if not args.fathom_command:
+        console.print("[red]Missing Fathom subcommand (use 'list' or 'analyze')[/red]")
+        return
+
+    if args.fathom_command == "list":
+        asyncio.run(fathom_list_meetings(args))
+    elif args.fathom_command == "analyze":
+        asyncio.run(fathom_analyze_recording(args))
+
+
+async def fathom_list_meetings(args):
+    """List recent Fathom meetings."""
+    console.print("\n[bold blue]Fetching Fathom meetings...[/bold blue]\n")
+    client = FathomClient()
+    meetings = await client.list_meetings(limit=args.limit)
+
+    table = Table(title=f"Fathom Meetings (latest {len(meetings)})")
+    table.add_column("Recording ID", style="cyan", no_wrap=True)
+    table.add_column("Title")
+    table.add_column("Created At", style="dim", no_wrap=True)
+    table.add_column("URL", style="dim")
+
+    for m in meetings:
+        table.add_row(m.id, m.title, m.created_at.isoformat(), m.url or "-")
+
+    console.print(table)
+    console.print()
+
+
+async def fathom_analyze_recording(args):
+    """Fetch a transcript from Fathom and analyze it."""
+    console.print("\n[bold blue]Fetching Fathom transcript...[/bold blue]")
+    client = FathomClient()
+    transcript = await client.get_transcript(args.recording_id)
+
+    is_sales = bool(args.sales)
+    call_type = "Sales (BANNT)" if is_sales else "Client Call"
+    console.print(f"Recording: {transcript.title}")
+    console.print(f"Type: {call_type}")
+    console.print(f"Provider: {args.provider}\n")
+
+    analyzer = QualityAnalyzer(provider=args.provider)
+    result = analyzer.analyze_transcript(
+        transcript.full_text,
+        is_sales_call=is_sales,
+        title=transcript.title or "Fathom Transcript",
+    )
+
+    # Prefer share_url if present so Slack link works for recipients.
+    result.document_url = transcript.share_url or transcript.url or f"fathom:{transcript.recording_id}"
+
+    display_result(result)
+
+    if args.slack:
+        console.print("\n[bold]Posting to Slack...[/bold]")
+        notifier = SlackNotifier()
+        slack_result = notifier.post_analysis(result)
+        if slack_result.get("success"):
+            console.print(f"[green]Posted to Slack[/green]")
+        else:
+            console.print(f"[red]Slack error: {slack_result.get('error')}[/red]")
 
 
 def display_result(result):

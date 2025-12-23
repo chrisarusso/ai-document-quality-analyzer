@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:developers.fathom.ai)",
+      "WebFetch(domain:help.fathom.video)",
+      "Bash(curl:*)",
+      "Bash(ssh:*)",
+      "Bash(rsync:*)"
+    ]
+  }
+}

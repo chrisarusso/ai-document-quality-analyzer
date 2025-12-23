@@ -128,7 +128,11 @@ Return a JSON object with this structure:
 
 Be strict but accurate. Only flag clear errors, not stylistic preferences.
 For technical terms, brand names, and proper nouns, do NOT flag as spelling errors.
-For spacing: flag double spaces, missing spaces after punctuation, inconsistent spacing."""
+For spacing: flag double spaces, missing spaces after punctuation, inconsistent spacing.
+The text may include slide separators like "--- Slide 5 ---" or "[SLIDE BREAK]". These are structural markers:
+- Never flag missing/extra spacing around these markers.
+- Do NOT treat content on different slides as the same sentence; spacing checks should stay within a single slide/paragraph.
+- Ignore hyphen/underline separator lines when considering spacing."""
 
     # Prompt for content/completeness analysis
     CONTENT_PROMPT = """You are a business document reviewer. Analyze this document for content quality and completeness.
