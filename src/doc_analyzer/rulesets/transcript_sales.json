@@ -1,0 +1,16 @@
+{
+  "name": "transcript_sales",
+  "extends": "default",
+  "description": "Ruleset for sales call transcripts (BANNT framework)",
+  "bannt": {
+    "budget_keywords": ["budget", "cost", "price", "spend", "investment", "range"],
+    "authority_keywords": ["decision", "approve", "sign off", "authority", "stakeholder"],
+    "need_keywords": ["pain point", "problem", "challenge", "struggle", "need", "requirement"],
+    "next_steps_keywords": ["follow up", "next step", "schedule", "meeting", "call"],
+    "timeline_keywords": ["timeline", "deadline", "date", "quarter", "month", "year", "when"]
+  },
+  "scoring": {
+    "type": "bannt",
+    "max_score": 5
+  }
+}

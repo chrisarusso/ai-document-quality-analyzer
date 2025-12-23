@@ -1,0 +1,35 @@
+{
+  "name": "default",
+  "description": "Default ruleset for all document types",
+  "version": "1.0",
+  "dictionary": {
+    "allowed_terms": [
+      "Drupal",
+      "WordPress",
+      "Kubernetes",
+      "API",
+      "APIs",
+      "OAuth",
+      "JSON",
+      "REST",
+      "GraphQL",
+      "Savas Labs",
+      "RIF",
+      "Skybrary"
+    ]
+  },
+  "scoring": {
+    "spelling_weight": 0.5,
+    "content_weight": 0.4,
+    "math_weight": 0.1,
+    "points_per_spelling_error": 5,
+    "points_per_missing_section": 15
+  },
+  "checks": {
+    "spelling": true,
+    "grammar": true,
+    "spacing": true,
+    "passive_voice": true,
+    "jargon": true
+  }
+}

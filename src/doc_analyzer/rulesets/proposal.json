@@ -1,0 +1,20 @@
+{
+  "name": "proposal",
+  "extends": "default",
+  "description": "Ruleset for proposals and RFP responses",
+  "required_sections": [
+    "Executive Summary",
+    "Scope",
+    "Timeline",
+    "Budget",
+    "Team",
+    "Next Steps"
+  ],
+  "required_keywords": [],
+  "checks": {
+    "math_in_tables": true,
+    "budget_totals": true,
+    "deliverables_defined": true,
+    "acceptance_criteria": true
+  }
+}

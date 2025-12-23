@@ -1,0 +1,22 @@
+{
+  "name": "kickoff",
+  "extends": "default",
+  "description": "Ruleset for client kickoff presentations",
+  "required_sections": [
+    "Introductions",
+    "Project Overview",
+    "Goals",
+    "Schedule",
+    "Next Steps"
+  ],
+  "required_keywords": [
+    "risk",
+    "timeline",
+    "stakeholder"
+  ],
+  "checks": {
+    "stakeholders_identified": true,
+    "success_criteria": true,
+    "communication_plan": true
+  }
+}

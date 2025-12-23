@@ -1,0 +1,22 @@
+{
+  "name": "transcript_client",
+  "extends": "default",
+  "description": "Ruleset for client call transcripts (opportunity/concern detection)",
+  "opportunity_signals": {
+    "expansion": ["additional", "more", "expand", "other projects", "next phase"],
+    "referral": ["recommend", "refer", "colleague", "other team", "sister company"],
+    "additional_work": ["also need", "would be nice", "future", "wish list", "nice to have"]
+  },
+  "concern_signals": {
+    "functionality": ["doesn't work", "broken", "bug", "issue", "problem", "not working"],
+    "satisfaction": ["frustrated", "disappointed", "unhappy", "concerned", "worried"],
+    "schedule": ["behind", "delayed", "late", "timeline", "deadline", "when will"],
+    "budget": ["expensive", "over budget", "cost", "afford", "billing"]
+  },
+  "severity_mapping": {
+    "critical": ["very frustrated", "unacceptable", "cancel", "terminate"],
+    "high": ["frustrated", "disappointed", "major issue"],
+    "medium": ["concerned", "worried", "minor issue"],
+    "low": ["would be nice", "suggestion"]
+  }
+}
