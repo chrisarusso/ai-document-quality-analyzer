@@ -387,25 +387,38 @@ HTML_PAGE = """
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f6f7fb; color: #222; }
     header { background: #111827; color: #fff; padding: 16px 24px; }
-    main { max-width: 960px; margin: 24px auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+    main { max-width: 1400px; margin: 24px auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
     label { display: block; margin-top: 16px; font-weight: 600; }
     input, select { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; margin-top: 6px; }
     button { margin-top: 20px; padding: 12px 16px; background: #2563eb; color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; }
     button:disabled { background: #93c5fd; cursor: not-allowed; }
     .row { display: flex; gap: 12px; margin-top: 12px; }
     .row .field { flex: 1; }
-    .chips { display: flex; gap: 12px; margin-top: 12px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
     .chip { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
     .chip input { width: auto; margin: 0; }
-    pre { background: #0b1021; color: #e5e7eb; padding: 16px; border-radius: 10px; overflow: auto; }
+    .chip.provider { border-color: #3b82f6; background: #eff6ff; }
+    pre { background: #0b1021; color: #e5e7eb; padding: 16px; border-radius: 10px; overflow: auto; font-size: 12px; max-height: 400px; }
     .muted { color: #6b7280; font-size: 14px; }
     .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #eef2ff; color: #4338ca; font-weight: 700; font-size: 12px; }
+    .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; margin-top: 20px; }
+    .result-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
+    .result-card.loading { opacity: 0.6; }
+    .result-card.error { border-color: #ef4444; background: #fef2f2; }
+    .result-card h4 { margin: 0 0 8px 0; display: flex; align-items: center; gap: 8px; }
+    .result-card .score { font-size: 32px; font-weight: 700; color: #2563eb; }
+    .result-card .issues { margin-top: 12px; }
+    .result-card .issue { padding: 4px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .result-card .issue:last-child { border-bottom: none; }
+    .provider-openai { border-left: 4px solid #10a37f; }
+    .provider-anthropic { border-left: 4px solid #d4a574; }
+    .provider-google { border-left: 4px solid #4285f4; }
   </style>
 </head>
 <body>
   <header>
     <h2>Document Quality Analyzer</h2>
-    <p class="muted">Paste a Google Doc/Slides URL, get a score, and post to Slack.</p>
+    <p class="muted">Paste a Google Doc/Slides URL, compare LLM providers side-by-side.</p>
   </header>
   <main>
     <form id="analyze-form">
@@ -414,12 +427,12 @@ HTML_PAGE = """
 
       <div class="row">
         <div class="field">
-          <label for="provider">Provider</label>
-          <select id="provider" name="provider">
-            <option value="openai">OpenAI (default)</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="google">Google</option>
-          </select>
+          <label>Providers (select one or more)</label>
+          <div class="chips">
+            <label class="chip provider"><input type="checkbox" id="provider-openai" checked /> OpenAI</label>
+            <label class="chip provider"><input type="checkbox" id="provider-anthropic" checked /> Anthropic</label>
+            <label class="chip provider"><input type="checkbox" id="provider-google" checked /> Gemini</label>
+          </div>
         </div>
         <div class="field">
           <label for="type">Type</label>
@@ -431,7 +444,7 @@ HTML_PAGE = """
         </div>
       </div>
 
-      <div class="chips">
+      <div class="chips" style="margin-top: 16px;">
         <label class="chip"><input type="checkbox" id="slack" /> Post to Slack</label>
         <label class="chip"><input type="checkbox" id="comment" /> Add Doc comment</label>
       </div>
@@ -487,50 +500,88 @@ HTML_PAGE = """
     const fathomForm = document.getElementById('fathom-form');
     const fathomStatus = document.getElementById('fathom_status');
 
+    function renderResultCard(provider, data, error) {
+      if (error) {
+        return `
+          <div class="result-card error provider-${provider}">
+            <h4>${provider.charAt(0).toUpperCase() + provider.slice(1)} <span class="pill">error</span></h4>
+            <p class="muted">${error}</p>
+          </div>
+        `;
+      }
+      const score = data.analysis.score ? data.analysis.score.overall : '—';
+      const issues = data.analysis.issues || [];
+      const issueHtml = issues.slice(0, 10).map(i =>
+        `<div class="issue"><strong>${i.category}:</strong> ${i.title}</div>`
+      ).join('');
+      const moreIssues = issues.length > 10 ? `<div class="muted">+${issues.length - 10} more issues</div>` : '';
+
+      return `
+        <div class="result-card provider-${provider}">
+          <h4>${provider.charAt(0).toUpperCase() + provider.slice(1)} <span class="pill">${data.analysis.document_type}</span></h4>
+          <div class="score">${score}<span style="font-size:16px;color:#6b7280">/100</span></div>
+          <p class="muted">${issues.length} issues found</p>
+          <div class="issues">${issueHtml}${moreIssues}</div>
+          <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Raw JSON</summary><pre>${JSON.stringify(data.analysis, null, 2)}</pre></details>
+        </div>
+      `;
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       result.innerHTML = '';
-      status.textContent = 'Running analysis...';
+
+      const providers = [];
+      if (document.getElementById('provider-openai').checked) providers.push('openai');
+      if (document.getElementById('provider-anthropic').checked) providers.push('anthropic');
+      if (document.getElementById('provider-google').checked) providers.push('google');
+
+      if (providers.length === 0) {
+        status.textContent = 'Please select at least one provider';
+        return;
+      }
+
+      status.textContent = `Running analysis with ${providers.length} provider(s)...`;
       const btn = form.querySelector('button');
       btn.disabled = true;
 
-      const payload = {
-        url: document.getElementById('url').value.trim(),
-        provider: document.getElementById('provider').value,
-        slack: document.getElementById('slack').checked,
-        comment: document.getElementById('comment').checked,
-      };
+      const url = document.getElementById('url').value.trim();
       const docType = document.getElementById('type').value;
-      if (docType) payload.type = docType;
+      const slack = document.getElementById('slack').checked;
+      const comment = document.getElementById('comment').checked;
 
-      try {
-        const res = await fetch('/api/analyze', {
+      // Show loading cards
+      result.innerHTML = '<div class="results-grid">' +
+        providers.map(p => `<div class="result-card loading provider-${p}"><h4>${p.charAt(0).toUpperCase() + p.slice(1)}</h4><p class="muted">Loading...</p></div>`).join('') +
+        '</div>';
+
+      // Run all providers in parallel
+      const results = await Promise.allSettled(providers.map(async (provider) => {
+        const payload = { url, provider, slack: slack && provider === providers[0], comment: comment && provider === providers[0] };
+        if (docType) payload.type = docType;
+
+        const res = await fetch('api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Request failed');
+        if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail) || 'Request failed');
+        return { provider, data };
+      }));
 
-        const score = data.analysis.score ? data.analysis.score.overall : '—';
-        const issueCount = data.analysis.issues.length;
-        const slack = data.slack?.url ? `<a href="${data.slack.url}" target="_blank">View Slack message</a>` : (payload.slack ? 'Posted to Slack' : 'Slack not requested');
-        const comment = data.comment?.success ? 'Comment added' : (payload.comment ? 'Comment attempted (check logs)' : 'No comment');
+      // Render results
+      const cards = results.map((r, i) => {
+        if (r.status === 'fulfilled') {
+          return renderResultCard(r.value.provider, r.value.data, null);
+        } else {
+          return renderResultCard(providers[i], null, r.reason.message);
+        }
+      }).join('');
 
-        result.innerHTML = `
-          <h3>${data.analysis.document_title} <span class="pill">${data.analysis.document_type}</span></h3>
-          <p class="muted">Provider: ${data.analysis.llm_provider} • Score: ${score}/100 • Issues: ${issueCount}</p>
-          <p class="muted">${slack} • ${comment}</p>
-          <pre>${JSON.stringify(data.analysis, null, 2)}</pre>
-        `;
-        status.textContent = '';
-      } catch (err) {
-        console.error(err);
-        status.textContent = err.message;
-      } finally {
-        btn.disabled = false;
-      }
+      result.innerHTML = '<div class="results-grid">' + cards + '</div>';
+      status.textContent = '';
+      btn.disabled = false;
     });
 
     fathomForm.addEventListener('submit', async (e) => {
@@ -548,7 +599,7 @@ HTML_PAGE = """
       };
 
       try {
-        const res = await fetch('/api/analyze-fathom', {
+        const res = await fetch('api/analyze-fathom', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

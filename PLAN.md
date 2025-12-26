@@ -1,11 +1,20 @@
 # Document Quality Analyzer
 
-**Status:** Phase 1 MVP Complete
-**Last Updated:** 2025-12-22
+**Status:** Phase 1 MVP - Webapp Live, Needs Refinement
+**Last Updated:** 2025-12-26
 
 ## Overview
 
 LLM-powered tool that reviews proposals, kickoffs, and call transcripts before manager review. Analyzes spelling, grammar, formatting, completeness, and ruleset adherence. Posts results to Slack and adds inline comments to Google Docs.
+
+---
+
+## Current Deployment
+
+- **Live URL:** https://secret-savas.savaslabs.com/doc-analyzer/
+- **EC2 Host:** ubuntu@3.142.219.101
+- **Deploy:** `./deploy.sh` (syncs local → EC2, restarts app)
+- **Verify sync:** `./deploy.sh --verify-only`
 
 ---
 
@@ -16,51 +25,55 @@ LLM-powered tool that reviews proposals, kickoffs, and call transcripts before m
 | Component | Status | Notes |
 |-----------|--------|-------|
 | **Google Slides extraction** | ✅ Working | Tested with RIF proposal (88 slides) and Sedgwick kickoff (16 slides) |
-| **Google Docs extraction** | ✅ Ready | Code complete, not yet tested with real doc |
+| **Google Docs extraction** | ✅ Working | Tested 2025-12-26 with APC TO-02 proposal |
 | **OpenAI analysis** | ✅ Working | GPT-4o-mini for spelling/grammar/content |
 | **Scoring system** | ✅ Working | 0-100 score with breakdown by category |
 | **Slack notifications** | ✅ Working | Posts to #document-analyzer-test, tags @chris |
 | **Google Docs comments** | ✅ Working | Adds unanchored comment with all issues |
 | **CLI tool** | ✅ Working | `uv run doc-analyzer analyze URL` |
-| **Fathom API connection** | ✅ Connected | API works, 0 meetings in account currently |
+| **Webapp** | ✅ Working | Multi-provider comparison UI at EC2 URL |
+| **Fathom webhook** | ✅ Working | Posts to Slack when recordings complete |
 | **Rulesets structure** | ✅ Created | JSON files for proposal, kickoff, transcripts |
 
-### What Needs Testing 🧪
+### What Needs Configuration 🔧
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| **Anthropic (Claude)** | ⚠️ Needs credits | Account has no balance |
-| **Google (Gemini)** | ⚠️ Quota exhausted | Free tier limit reached |
-| **Transcript analysis** | 🧪 Untested | BANNT and opportunity/concern detection built but not tested |
-| **Google Docs (not Slides)** | 🧪 Untested | Extractor ready, needs real document |
-| **Fathom webhook** | 🧪 Untested | Endpoint not yet built |
+| **Anthropic (Claude)** | ⚠️ Needs API key config | Key exists but not working in webapp |
+| **Google (Gemini)** | ⚠️ Needs API key config | Key exists but not working in webapp |
 
 ### Known Issues 🐛
 
 | Issue | Severity | Description |
 |-------|----------|-------------|
-| **Spacing false positives** | Medium | Slide boundaries create false "spacing errors" when text from slide N runs into slide N+1. LLM sees `"What To Expect\n--- Slide 5 ---"` as spacing issue. |
-| **Document type detection** | Low | Auto-detection based on URL only; doesn't detect "kickoff" unless URL contains the word. Use `--type kickoff` to override. |
-| **Score variability** | Low | Same document can get different scores on different runs (LLM non-determinism). Consider caching or averaging. |
+| **Spacing detection missed** | High | Did not find extra space in test doc (reported Dec 22) |
+| **Issues hard to read** | Medium | UI shows issues but formatting needs improvement |
+| **Arbitrary rules** | Medium | Currently flags "must have executive summary" without clear ruleset definition |
+| **Score needs review** | Medium | LLM generates its own score - needs human review of scoring logic |
+| **UI layout** | Medium | Side-by-side cards should stack vertically, be full-width, and collapsible |
+| **No auth on webapp** | Low | Anyone with URL can access; should add login or move to authenticated subdomain |
+| **No login indicator** | Low | If auth exists, should show logged-in user in top-right |
 
-### Next Steps 📋
+### Next Steps 📋 (Pick Up Here)
 
-**Immediate (to complete Phase 1):**
-1. [ ] Build simple webapp (paste URL → see results → post to Slack)
-2. [ ] Fix spacing false positives (update prompt to understand slide markers)
-3. [ ] Test with a real Google Doc (not Slides)
+**Immediate:**
+1. [ ] Fix Anthropic/Gemini API key configuration
+2. [ ] Redesign UI: full-width stacked cards, collapsible sections
+3. [ ] Review and document actual ruleset requirements (what SHOULD be checked?)
+4. [ ] Fix spacing detection (test with known extra-space document)
+5. [ ] Review scoring logic - maybe score should only report to admin, not users
 
 **Short-term:**
-4. [ ] Add Fathom webhook receiver for auto-analysis
-5. [ ] Test transcript analysis with real call transcript
-6. [ ] Add credits to Anthropic/Google for provider comparison
-7. [ ] Tune prompts to reduce false positives
+6. [ ] Add authentication to webapp (or create new subdomain with auth)
+7. [ ] Show logged-in user indicator
+8. [ ] Improve issue display formatting/readability
+9. [ ] Test transcript analysis with real call transcript
 
 **Future (Phase 2+):**
-8. [ ] Store analysis history in database
-9. [ ] Track score trends over time
-10. [ ] Add custom dictionary UI (click to add term)
-11. [ ] Learning from accepted/rejected suggestions
+10. [ ] Store analysis history in database
+11. [ ] Track score trends over time
+12. [ ] Add custom dictionary UI (click to add term)
+13. [ ] Learning from accepted/rejected suggestions
 
 ### Test Commands
 
@@ -374,15 +387,15 @@ PUT /rulesets/{id}
 |-------------|----------|--------|
 | Google Docs/Slides text extraction | P0 | ✅ Done |
 | LLM analysis (spelling/grammar/content) | P0 | ✅ Done |
-| Ruleset system (default + per-type) | P0 | ✅ Done |
+| Ruleset system (default + per-type) | P0 | ✅ Done (needs refinement) |
 | Slack notification posting | P0 | ✅ Done |
 | Google Docs comment insertion | P0 | ✅ Done |
-| Numeric scoring system | P0 | ✅ Done |
-| Simple webapp (paste URL) | P0 | ⬜ Not started |
+| Numeric scoring system | P0 | ✅ Done (needs review) |
+| Simple webapp (paste URL) | P0 | ✅ Done (needs UI polish) |
 | BANNT scoring for sales calls | P1 | 🔶 Built, untested |
 | Opportunity/concern detection for client calls | P1 | 🔶 Built, untested |
-| Fathom webhook receiver | P1 | ⬜ Not started |
-| Compare 3 LLM providers | P1 | 🔶 Partial (OpenAI works, others need credits) |
+| Fathom webhook receiver | P1 | ✅ Done |
+| Compare 3 LLM providers | P1 | 🔶 Partial (OpenAI works, Anthropic/Gemini need config) |
 | Analysis history storage | P2 | ⬜ Not started |
 | Score trend tracking | P2 | ⬜ Not started |
 | Custom dictionary (add terms) | P2 | ⬜ Not started |

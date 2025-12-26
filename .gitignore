@@ -1,5 +1,5 @@
-# Note: .env is tracked for this learning project (non-production)
-# In production, add .env to gitignore
+# Environment variables (contains API keys)
+.env
 
 __pycache__/
 *.py[cod]

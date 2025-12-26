@@ -6,7 +6,13 @@
       "WebFetch(domain:help.fathom.video)",
       "Bash(curl:*)",
       "Bash(ssh:*)",
-      "Bash(rsync:*)"
+      "Bash(rsync:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(python3:*)",
+      "Bash(uv run python:*)",
+      "Bash(uv run doc-analyzer:*)"
     ]
   }
 }

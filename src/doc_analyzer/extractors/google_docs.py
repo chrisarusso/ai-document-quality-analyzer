@@ -11,10 +11,11 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 
-# Scopes needed for reading docs and adding comments
+# Unified scopes for Docs, Slides, and Drive (comments)
 SCOPES = [
     "https://www.googleapis.com/auth/documents.readonly",
-    "https://www.googleapis.com/auth/drive",  # For comments
+    "https://www.googleapis.com/auth/presentations.readonly",
+    "https://www.googleapis.com/auth/drive",
 ]
 
 
