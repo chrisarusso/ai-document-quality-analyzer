@@ -416,6 +416,9 @@ HTML_PAGE = """
   </style>
 </head>
 <body>
+  <nav style="padding: 10px 20px; background: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+    <a href="/" style="color: #007bff; text-decoration: none;">← Internal Tools</a>
+  </nav>
   <header>
     <h2>Document Quality Analyzer</h2>
     <p class="muted">Paste a Google Doc/Slides URL, compare LLM providers side-by-side.</p>
