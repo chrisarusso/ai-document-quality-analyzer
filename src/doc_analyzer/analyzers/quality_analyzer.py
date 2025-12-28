@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from .llm_analyzer import LLMAnalyzer, LLMProvider
+from .rule_checker import RuleChecker, RuleMatch
 from ..extractors.google_slides import GoogleSlidesExtractor
 from ..extractors.google_docs import GoogleDocsExtractor
 from ..models import (
@@ -15,8 +16,9 @@ from ..models import (
 class QualityAnalyzer:
     """Main document quality analyzer."""
 
-    def __init__(self, provider: LLMProvider = "openai"):
+    def __init__(self, provider: LLMProvider = "openai", disabled_rules: Optional[list[str]] = None):
         self.llm = LLMAnalyzer(provider=provider)
+        self.rule_checker = RuleChecker(disabled_rules=disabled_rules)
         self.slides_extractor = GoogleSlidesExtractor()
         self.docs_extractor = GoogleDocsExtractor()
 
@@ -50,9 +52,12 @@ class QualityAnalyzer:
         text = extracted.get("full_text", "")
         title = extracted.get("title", "Untitled")
 
-        # Analyze with LLM
+        # Run deterministic rule checks first (fast, reliable)
         issues = []
+        rule_matches = self.rule_checker.check_all(text)
+        issues.extend(self._convert_rule_matches(rule_matches))
 
+        # Then run LLM analysis
         # Spelling/grammar analysis
         sg_result = self.llm.analyze_spelling_grammar(text[:30000])  # Limit for token cost
         issues.extend(self._convert_sg_issues(sg_result))
@@ -123,6 +128,40 @@ class QualityAnalyzer:
         if "kickoff" in url_lower or "kick-off" in url_lower:
             return DocumentType.KICKOFF
         return DocumentType.PROPOSAL
+
+    def _convert_rule_matches(self, matches: list[RuleMatch]) -> list[Issue]:
+        """Convert deterministic rule matches to Issue objects.
+
+        Each issue is tagged with rule_id in context for easy filtering.
+        """
+        issues = []
+        category_map = {
+            "spelling": IssueCategory.SPELLING,
+            "grammar": IssueCategory.GRAMMAR,
+            "spacing": IssueCategory.SPACING,
+            "formatting": IssueCategory.FORMATTING,
+        }
+        severity_map = {
+            "high": IssueSeverity.HIGH,
+            "medium": IssueSeverity.MEDIUM,
+            "low": IssueSeverity.LOW,
+        }
+
+        for match in matches:
+            category = category_map.get(match.category, IssueCategory.FORMATTING)
+            severity = severity_map.get(match.severity, IssueSeverity.MEDIUM)
+
+            issues.append(Issue(
+                category=category,
+                severity=severity,
+                title=f"[{match.rule_id}] {match.rule_name}",
+                description=f"{match.text}",
+                location=match.location,
+                context=match.context,
+                suggestion=match.suggestion,
+                affects_score=severity != IssueSeverity.LOW,
+            ))
+        return issues
 
     def _convert_sg_issues(self, result: dict) -> list[Issue]:
         """Convert spelling/grammar results to Issue objects."""

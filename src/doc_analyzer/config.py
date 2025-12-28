@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="", description="OpenAI API key")
     anthropic_api_key: str = Field(default="", description="Anthropic API key")
     google_api_key: str = Field(default="", description="Google Gemini API key")
+    openrouter_api_key: str = Field(default="", description="OpenRouter API key for multi-model access")
 
     # Slack
     slack_bot_token: str = Field(default="", description="Slack bot OAuth token")

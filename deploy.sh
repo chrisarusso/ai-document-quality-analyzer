@@ -57,10 +57,10 @@ ssh -i "$EC2_KEY" "$EC2_HOST" "pkill -f 'uvicorn doc_analyzer.api' || true; slee
 # Step 4: Wait and verify
 echo -e "\n${YELLOW}Step 4: Verifying deployment...${NC}"
 sleep 4
-HEALTH=$(curl -s https://secret-savas.savaslabs.com/doc-analyzer/health 2>/dev/null || echo "failed")
+HEALTH=$(curl -s https://internal.savaslabs.com/document-analyzer/health 2>/dev/null || echo "failed")
 if [[ "$HEALTH" == *"ok"* ]]; then
     echo -e "${GREEN}✓ Deployment successful!${NC}"
-    echo -e "\n${GREEN}App URL:${NC} https://secret-savas.savaslabs.com/doc-analyzer/"
+    echo -e "\n${GREEN}App URL:${NC} https://internal.savaslabs.com/document-analyzer/"
 else
     echo -e "${RED}✗ Health check failed. Check logs with:${NC}"
     echo "  ssh -i $EC2_KEY $EC2_HOST 'tail -50 /tmp/doc-analyzer.log'"

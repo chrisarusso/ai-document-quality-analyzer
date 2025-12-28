@@ -12,7 +12,7 @@ from ..config import get_settings
 from ..models import Issue, IssueCategory, IssueSeverity
 
 
-LLMProvider = Literal["openai", "anthropic", "google"]
+LLMProvider = Literal["openai", "anthropic", "google", "llama-70b", "gemini-flash"]
 
 
 class BaseLLMProvider(ABC):
@@ -58,7 +58,7 @@ class OpenAIProvider(BaseLLMProvider):
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic Claude provider."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-3-5-haiku-20241022"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "claude-3-haiku-20240307"):
         settings = get_settings()
         self.client = Anthropic(api_key=api_key or settings.anthropic_api_key)
         self.model = model
@@ -100,6 +100,43 @@ class GoogleProvider(BaseLLMProvider):
             ),
         )
         return response.text
+
+
+class OpenRouterProvider(BaseLLMProvider):
+    """OpenRouter provider for accessing multiple models via unified API."""
+
+    # Available models via OpenRouter
+    MODELS = {
+        "llama-70b": "meta-llama/llama-3.3-70b-instruct:free",
+        "gemini-flash": "google/gemini-2.0-flash-001",  # Paid, reliable, ~$0.10/1M input
+    }
+
+    def __init__(self, model_key: str = "llama-70b", api_key: Optional[str] = None):
+        settings = get_settings()
+        self.api_key = api_key or settings.openrouter_api_key
+        if model_key not in self.MODELS:
+            raise ValueError(f"Unknown OpenRouter model: {model_key}. Available: {list(self.MODELS.keys())}")
+        self.model = self.MODELS[model_key]
+        self.model_key = model_key
+        self.client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=self.api_key,
+        )
+
+    @property
+    def name(self) -> str:
+        return f"openrouter/{self.model_key}"
+
+    def analyze(self, text: str, prompt: str) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": text},
+            ],
+            temperature=0.3,
+        )
+        return response.choices[0].message.content
 
 
 class LLMAnalyzer:
@@ -233,6 +270,10 @@ Return a JSON object with this structure:
             return AnthropicProvider()
         elif provider == "google":
             return GoogleProvider()
+        elif provider == "llama-70b":
+            return OpenRouterProvider(model_key="llama-70b")
+        elif provider == "gemini-flash":
+            return OpenRouterProvider(model_key="gemini-flash")
         else:
             raise ValueError(f"Unknown provider: {provider}")
 

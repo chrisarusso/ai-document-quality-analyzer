@@ -11,7 +11,7 @@ LLM-powered tool that reviews proposals, kickoffs, and call transcripts before m
 
 ## Current Deployment
 
-- **Live URL:** https://secret-savas.savaslabs.com/doc-analyzer/
+- **Live URL:** https://internal.savaslabs.com/document-analyzer/
 - **EC2 Host:** ubuntu@3.142.219.101
 - **Deploy:** `./deploy.sh` (syncs local → EC2, restarts app)
 - **Verify sync:** `./deploy.sh --verify-only`

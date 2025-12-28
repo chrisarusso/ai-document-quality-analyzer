@@ -28,10 +28,9 @@ class AnalyzeRequest(BaseModel):
     """Request payload for /api/analyze."""
 
     url: HttpUrl
-    provider: Literal["openai", "anthropic", "google"] = "openai"
+    provider: Literal["openai", "anthropic", "google", "llama-70b", "gemini-flash"] = "openai"
     type: Optional[DocumentType] = None
     slack: bool = False
-    comment: bool = False
 
 
 class AnalyzeResponse(BaseModel):
@@ -39,14 +38,13 @@ class AnalyzeResponse(BaseModel):
 
     analysis: dict
     slack: Optional[dict] = None
-    comment: Optional[dict] = None
 
 
 class AnalyzeFathomRequest(BaseModel):
     """Request payload for /api/analyze-fathom."""
 
     recording_id: str
-    provider: Literal["openai", "anthropic", "google"] = "openai"
+    provider: Literal["openai", "anthropic", "google", "llama-70b", "gemini-flash"] = "openai"
     is_sales_call: bool = True
     slack: bool = False
 
@@ -161,28 +159,6 @@ def _serialize_result(result: AnalysisResult) -> dict:
     }
 
 
-def _build_comment(analyzer: QualityAnalyzer, url: str, result: AnalysisResult) -> dict:
-    """Add a single comment summarizing issues to the document."""
-    extractor = analyzer.slides_extractor if "/presentation/" in url else analyzer.docs_extractor
-
-    comment_lines = ["[Document Quality Analyzer]", ""]
-
-    for issue in result.issues[:20]:
-        line = f"{issue.severity.value.upper()} {issue.category.value}: {issue.title}"
-        if issue.location:
-            line += f" ({issue.location})"
-        comment_lines.append(line)
-
-        if issue.suggestion:
-            comment_lines.append(f"   → {issue.suggestion}")
-        comment_lines.append("")
-
-    if len(result.issues) > 20:
-        comment_lines.append(f"... and {len(result.issues) - 20} more issues")
-
-    return extractor.add_comment(url, "\n".join(comment_lines))
-
-
 def _fetch_fathom_transcript(recording_id: str) -> dict:
     """Fetch a Fathom transcript and return a JSON-serializable dict."""
     client = FathomClient()
@@ -223,14 +199,9 @@ async def analyze(request: AnalyzeRequest):
         notifier = SlackNotifier()
         slack_result = await run_in_threadpool(notifier.post_analysis, result)
 
-    comment_result = None
-    if request.comment:
-        comment_result = await run_in_threadpool(_build_comment, analyzer, str(request.url), result)
-
     return {
         "analysis": _serialize_result(result),
         "slack": slack_result,
-        "comment": comment_result,
     }
 
 
@@ -413,6 +384,8 @@ HTML_PAGE = """
     .provider-openai { border-left: 4px solid #10a37f; }
     .provider-anthropic { border-left: 4px solid #d4a574; }
     .provider-google { border-left: 4px solid #4285f4; }
+    .provider-llama-70b { border-left: 4px solid #6366f1; }
+    .provider-gemini-flash { border-left: 4px solid #22c55e; }
   </style>
 </head>
 <body>
@@ -434,7 +407,8 @@ HTML_PAGE = """
           <div class="chips">
             <label class="chip provider"><input type="checkbox" id="provider-openai" checked /> OpenAI</label>
             <label class="chip provider"><input type="checkbox" id="provider-anthropic" checked /> Anthropic</label>
-            <label class="chip provider"><input type="checkbox" id="provider-google" checked /> Gemini</label>
+            <label class="chip provider"><input type="checkbox" id="provider-llama-70b" checked /> Llama 3.3 70B (free)</label>
+            <label class="chip provider"><input type="checkbox" id="provider-gemini-flash" checked /> Gemini 2.0 Flash</label>
           </div>
         </div>
         <div class="field">
@@ -449,7 +423,6 @@ HTML_PAGE = """
 
       <div class="chips" style="margin-top: 16px;">
         <label class="chip"><input type="checkbox" id="slack" /> Post to Slack</label>
-        <label class="chip"><input type="checkbox" id="comment" /> Add Doc comment</label>
       </div>
 
       <button type="submit">Run Analysis</button>
@@ -469,9 +442,10 @@ HTML_PAGE = """
         <div class="field">
           <label for="fathom_provider">Provider</label>
           <select id="fathom_provider" name="provider">
-            <option value="openai">OpenAI (default)</option>
+            <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic</option>
-            <option value="google">Google</option>
+            <option value="llama-70b">Llama 3.3 70B (free)</option>
+            <option value="gemini-flash">Gemini 2.0 Flash</option>
           </select>
         </div>
         <div class="field">
@@ -503,7 +477,34 @@ HTML_PAGE = """
     const fathomForm = document.getElementById('fathom-form');
     const fathomStatus = document.getElementById('fathom_status');
 
-    function renderResultCard(provider, data, error) {
+    // Render rule checks section (shown once, not per provider)
+    function renderRuleChecks(issues) {
+      const ruleIssues = issues.filter(i => i.title.startsWith('['));
+      if (ruleIssues.length === 0) return '';
+
+      return `
+        <div style="margin-bottom:20px;padding:16px;background:#fef3c7;border-radius:10px;border:1px solid #f59e0b;">
+          <h4 style="margin:0 0 12px 0;color:#92400e;">⚡ Rule-Based Checks (${ruleIssues.length})</h4>
+          <p class="muted" style="margin:0 0 12px 0;">Deterministic checks — same results every time</p>
+          ${ruleIssues.map(i => {
+            const match = i.title.match(/^\[([^\]]+)\]/);
+            const ruleId = match ? match[1] : 'unknown';
+            const title = i.title.replace(/^\[[^\]]+\]\s*/, '');
+            const context = i.context ? `<div style="font-size:12px;color:#666;margin-top:4px;font-family:monospace;background:#fff;padding:4px 8px;border-radius:4px;">${i.context}</div>` : '';
+            const location = i.location ? `<span style="color:#888;font-size:11px;"> — ${i.location}</span>` : '';
+            return `
+              <div style="padding:8px 0;border-bottom:1px solid #fcd34d;">
+                <code style="background:#fde68a;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;">${ruleId}</code>
+                <span style="margin-left:8px;">${title}</span>${location}
+                ${context}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function renderResultCard(provider, data, error, isFirst) {
       if (error) {
         return `
           <div class="result-card error provider-${provider}">
@@ -514,17 +515,33 @@ HTML_PAGE = """
       }
       const score = data.analysis.score ? data.analysis.score.overall : '—';
       const issues = data.analysis.issues || [];
-      const issueHtml = issues.slice(0, 10).map(i =>
-        `<div class="issue"><strong>${i.category}:</strong> ${i.title}</div>`
-      ).join('');
-      const moreIssues = issues.length > 10 ? `<div class="muted">+${issues.length - 10} more issues</div>` : '';
+
+      // Only LLM issues for provider cards
+      const llmIssues = issues.filter(i => !i.title.startsWith('['));
+
+      // Render LLM issues with context
+      const llmHtml = llmIssues.length > 0 ? `
+        <div style="margin-top:12px;">
+          ${llmIssues.slice(0, 10).map(i => {
+            const context = i.context ? `<div style="font-size:12px;color:#666;margin-top:2px;font-family:monospace;background:#f9fafb;padding:4px 8px;border-radius:4px;">${i.context}</div>` : '';
+            const location = i.location ? `<span style="color:#888;font-size:11px;"> — ${i.location}</span>` : '';
+            return `
+              <div class="issue" style="padding:6px 0;">
+                <strong>${i.category}:</strong> ${i.title}${location}
+                ${context}
+              </div>
+            `;
+          }).join('')}
+          ${llmIssues.length > 10 ? `<div class="muted">+${llmIssues.length - 10} more</div>` : ''}
+        </div>
+      ` : '<p class="muted">No additional issues found</p>';
 
       return `
         <div class="result-card provider-${provider}">
           <h4>${provider.charAt(0).toUpperCase() + provider.slice(1)} <span class="pill">${data.analysis.document_type}</span></h4>
           <div class="score">${score}<span style="font-size:16px;color:#6b7280">/100</span></div>
-          <p class="muted">${issues.length} issues found</p>
-          <div class="issues">${issueHtml}${moreIssues}</div>
+          <p class="muted">🤖 LLM found ${llmIssues.length} issues</p>
+          ${llmHtml}
           <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Raw JSON</summary><pre>${JSON.stringify(data.analysis, null, 2)}</pre></details>
         </div>
       `;
@@ -537,7 +554,8 @@ HTML_PAGE = """
       const providers = [];
       if (document.getElementById('provider-openai').checked) providers.push('openai');
       if (document.getElementById('provider-anthropic').checked) providers.push('anthropic');
-      if (document.getElementById('provider-google').checked) providers.push('google');
+      if (document.getElementById('provider-llama-70b').checked) providers.push('llama-70b');
+      if (document.getElementById('provider-gemini-flash').checked) providers.push('gemini-flash');
 
       if (providers.length === 0) {
         status.textContent = 'Please select at least one provider';
@@ -551,7 +569,6 @@ HTML_PAGE = """
       const url = document.getElementById('url').value.trim();
       const docType = document.getElementById('type').value;
       const slack = document.getElementById('slack').checked;
-      const comment = document.getElementById('comment').checked;
 
       // Show loading cards
       result.innerHTML = '<div class="results-grid">' +
@@ -560,7 +577,7 @@ HTML_PAGE = """
 
       // Run all providers in parallel
       const results = await Promise.allSettled(providers.map(async (provider) => {
-        const payload = { url, provider, slack: slack && provider === providers[0], comment: comment && provider === providers[0] };
+        const payload = { url, provider, slack: slack && provider === providers[0] };
         if (docType) payload.type = docType;
 
         const res = await fetch('api/analyze', {
@@ -574,15 +591,22 @@ HTML_PAGE = """
       }));
 
       // Render results
+      // Get rule checks from first successful result (they're the same for all)
+      let ruleChecksHtml = '';
+      const firstSuccess = results.find(r => r.status === 'fulfilled');
+      if (firstSuccess) {
+        ruleChecksHtml = renderRuleChecks(firstSuccess.value.data.analysis.issues || []);
+      }
+
       const cards = results.map((r, i) => {
         if (r.status === 'fulfilled') {
-          return renderResultCard(r.value.provider, r.value.data, null);
+          return renderResultCard(r.value.provider, r.value.data, null, i === 0);
         } else {
-          return renderResultCard(providers[i], null, r.reason.message);
+          return renderResultCard(providers[i], null, r.reason.message, i === 0);
         }
       }).join('');
 
-      result.innerHTML = '<div class="results-grid">' + cards + '</div>';
+      result.innerHTML = ruleChecksHtml + '<div class="results-grid">' + cards + '</div>';
       status.textContent = '';
       btn.disabled = false;
     });
